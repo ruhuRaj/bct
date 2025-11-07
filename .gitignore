@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Node
+node_modules/
+
+# VS Code
+.vscode/
+
+# Ganache
+.ganache/
+
+# Build
+build/
+
+# Local development
+*.log

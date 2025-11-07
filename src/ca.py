@@ -1,0 +1,1 @@
+powerContractAddress='0x537b0b1605dB19d868afd2c298cDF94827Bd1457'
