@@ -1,34 +1,62 @@
+import os
+from pathlib import Path
 import streamlit as st
 from web3 import Web3, HTTPProvider
-from ca import *
+from ca import powerContractAddress
 import json
-import time
+
+# Directories
+SRC_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SRC_DIR.parent
+
+# Configurable via environment variables for deployment
+RPC_URL = os.getenv("RPC_URL", "http://127.0.0.1:7545")
+CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS", powerContractAddress)
+
 
 def connect_Blockchain_iot(acc):
-    blockchain_address="http://127.0.0.1:7545"
-    web3=Web3(HTTPProvider(blockchain_address))
-    if(acc==0):
-        acc=web3.eth.accounts[0]
-    web3.eth.defaultAccount=acc
-    artifact_path='c:/Users/BITG/Desktop/lower-electricity-bills-using-blockchain-main/build/contracts/power.json'
-    contract_address=powerContractAddress
-    with open(artifact_path) as f:
-        contract_json=json.load(f)
-        contract_abi=contract_json['abi']
+    web3 = Web3(HTTPProvider(RPC_URL))
+    if not web3.isConnected():
+        st.warning(f"Could not connect to blockchain node at {RPC_URL}")
+        return (None, web3)
 
-    contract=web3.eth.contract(address=contract_address,abi=contract_abi)
-    print('connected with blockchain')
-    return (contract,web3)
+    if acc == 0:
+        # web3.eth.accounts may be empty depending on provider
+        acc = web3.eth.accounts[0] if web3.eth.accounts else None
+
+    web3.eth.default_account = acc
+
+    artifact_path = REPO_ROOT / 'build' / 'contracts' / 'power.json'
+    if not artifact_path.exists():
+        st.error(f"Contract artifact not found: {artifact_path}")
+        return (None, web3)
+
+    with open(artifact_path) as f:
+        contract_json = json.load(f)
+        contract_abi = contract_json.get('abi')
+
+    contract = web3.eth.contract(address=CONTRACT_ADDRESS, abi=contract_abi)
+    return (contract, web3)
+
 
 st.title('Lower Electricity Bills using Blockchain')
 
-contract,web3=connect_Blockchain_iot(0)
-status=contract.functions.checkPower().call()
-st.success(status)
-if(status==1):
-    st.image('c:/Users/BITG/Desktop/lower-electricity-bills-using-blockchain-main/src/solar_roof.jpg')
-else:
-    st.image('c:/Users/BITG/Desktop/lower-electricity-bills-using-blockchain-main/src/power_grid.jpg')
+contract, web3 = connect_Blockchain_iot(0)
+if contract is None:
+    # connect_Blockchain_iot already displayed an error/warning
+    st.stop()
 
-time.sleep(4)
-st.rerun()
+try:
+    status = contract.functions.checkPower().call()
+    st.success(f"Power status: {status}")
+
+    # Images are stored in src/ — use a relative path so Streamlit Cloud can find them
+    img_path = SRC_DIR / ('solar_roof.jpg' if status == 1 else 'power_grid.jpg')
+    if img_path.exists():
+        st.image(str(img_path))
+    else:
+        st.warning(f"Image not found: {img_path}")
+
+except Exception as e:
+    st.error("Error calling contract function. See details below.")
+    st.exception(e)
